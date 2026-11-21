@@ -24,7 +24,7 @@ static const char *PRESETS = "/data/adb/modules/vspoofer/presets.conf";
 
 struct Spoof {
     bool on = false;
-    std::string brand, manu, model, dev, name;
+    std::string label, brand, manu, model, dev, name;
 };
 
 // ---------------------------------------------------------------- IO helpers
@@ -104,7 +104,7 @@ static Spoof decide(const std::string &pkg) {
     if (id.empty()) id = "rog7";
     std::vector<std::string> p;
     if (!find_preset(std::string(DATA) + "/custom.conf", id, p) && !find_preset(PRESETS, id, p)) return s;
-    s.brand = p[2]; s.manu = p[3]; s.model = p[4]; s.dev = p[5]; s.name = p[6];
+    s.label = p[1]; s.brand = p[2]; s.manu = p[3]; s.model = p[4]; s.dev = p[5]; s.name = p[6];
     s.on = true;
     return s;
 }
@@ -113,6 +113,10 @@ static void companion_handler(int fd) {
     if (!rd_str(fd, pkg)) return;
     Spoof s = decide(pkg);
     uint8_t on = s.on ? 1 : 0;
+    if (s.on) {
+        std::ofstream lf(std::string(DATA) + "/last", std::ios::trunc);
+        lf << pkg << '|' << s.label << '\n';
+    }
     if (!wr(fd, &on, 1) || !on) return;
     wr_str(fd, s.brand); wr_str(fd, s.manu); wr_str(fd, s.model);
     wr_str(fd, s.dev);   wr_str(fd, s.name);
