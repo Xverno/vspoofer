@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.18)
+project(vspoofer CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_library(vspoofer SHARED vspoofer.cpp)
+target_compile_options(vspoofer PRIVATE -Wall -Wno-deprecated-declarations)
+target_link_libraries(vspoofer log)

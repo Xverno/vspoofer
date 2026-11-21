@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>V Spoofer</title>
+<style>
+:root{--bg:#0b1020;--card:#131a30;--line:#22305a;--txt:#e8eeff;--mut:#8fa0cf;--acc:#4d8dff;--ok:#38d39f;--warn:#ffb454}
+@media(prefers-color-scheme:light){:root{--bg:#f2f5ff;--card:#fff;--line:#d5def5;--txt:#10183a;--mut:#5a6a9a;--acc:#2f6bff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,sans-serif;padding:16px 16px 90px}
+h1{margin:0;font-size:24px}h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:22px 0 8px}
+a{color:var(--acc);text-decoration:none}.sub{color:var(--mut);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px}
+.chip{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);margin-top:8px}
+.chip.on{color:var(--ok);border-color:var(--ok)}
+.seg{display:flex;gap:6px}.seg button,.grid button{flex:1;padding:10px 6px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--txt);font:inherit}
+.seg button.sel,.grid button.sel{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 20%,var(--card))}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid button{text-align:left;font-size:13px}
+.warn{color:var(--warn);font-size:13px;margin-top:8px}
+input[type=text],input[type=search]{width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--txt);font:inherit;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.row div{flex:1;min-width:0}.row b{display:block;font-weight:600}.row small{color:var(--mut);word-break:break-all}
+.row input{width:20px;height:20px;accent-color:var(--acc)}
+#list{max-height:340px;overflow:auto}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--line);display:flex;gap:8px}
+.bar button{flex:1;padding:13px;border-radius:14px;border:0;font:inherit;font-weight:700}
+#save{background:var(--acc);color:#fff}#stock{background:var(--card);color:var(--txt);border:1px solid var(--line)}
+#custom{display:none;margin-top:8px}
+</style></head><body>
+<h1>V Spoofer</h1>
+<div class="sub">by @Xverno · <a href="https://t.me/VernoTalks">t.me/VernoTalks</a></div>
+<span class="chip" id="status">…</span>
+
+<h2>Mode</h2>
+<div class="seg" id="mode"></div>
+<div class="warn" id="modeNote"></div>
+
+<h2>Engine</h2>
+<div class="seg" id="engine"></div>
+<div class="warn" id="engNote"></div>
+
+<h2>Device to spoof as</h2>
+<div class="grid" id="presets"></div>
+<div id="custom" class="card">
+  <input type="text" id="c_brand" placeholder="Brand (e.g. asus)">
+  <input type="text" id="c_manu" placeholder="Manufacturer">
+  <input type="text" id="c_model" placeholder="Model (e.g. ASUS_AI2205)">
+  <input type="text" id="c_dev" placeholder="Device codename">
+  <input type="text" id="c_name" placeholder="Product name">
+</div>
+
+<h2>Games (<span id="count">0</span> selected)</h2>
+<div class="card">
+  <input type="search" id="q" placeholder="Search apps">
+  <div id="list"></div>
+</div>
+<p class="sub">Per-app mode spoofs only the selected games. Fully close and reopen a game after saving.</p>
+
+<div class="bar"><button id="stock">Restore stock</button><button id="save">Save &amp; apply</button></div>
+
+<script>
+const DIR='/data/adb/vspoofer',MOD='/data/adb/modules/vspoofer';
+const $=s=>document.querySelector(s);
+const sh=cmd=>new Promise(r=>{
+  if(typeof ksu==='undefined'){r('');return}
+  const cb='c'+Date.now()+Math.floor(Math.random()*1e6);
+  window[cb]=(c,o)=>{delete window[cb];r(o||'')};
+  ksu.exec(cmd,'{}',cb)});
+const KNOWN={'com.pubg.imobile':'BGMI','com.tencent.ig':'PUBG Mobile','com.activision.callofduty.shooter':'COD Mobile','com.dts.freefireth':'Free Fire','com.dts.freefiremax':'Free Fire MAX','com.miHoYo.GenshinImpact':'Genshin Impact','com.HoYoverse.hkrpgoversea':'Honkai: Star Rail','com.mobile.legends':'Mobile Legends','com.riotgames.league.wildrift':'Wild Rift','com.gameloft.android.ANMP.GloftA9HM':'Asphalt 9','com.proximabeta.mf.uamo':'Arena Breakout'};
+const MODES=[['off','Off'],['perapp','Per-app'],['global','Global']];
+const NOTES={off:'',perapp:'',global:'Global spoofs the whole system all the time. It can break Play Integrity, banking and carrier apps. Prefer Per-app.'};
+const ENGINES=[['zygisk','Zygisk'],['script','Script']];
+const ENOTE={zygisk:'Only the selected games see the spoof. Needs Zygisk enabled, then a reboot.',script:'Changes props system-wide while a game runs. Works without Zygisk.'};
+const S={engine:'zygisk',mode:'perapp',preset:'rog7',presets:[],custom:{},games:new Set(),installed:[],q:''};
+
+function parse(t){return t.split('\n').filter(Boolean).map(l=>l.split('|'))}
+async function load(){
+  const out=await sh(`cat ${MOD}/presets.conf; echo '@@'; cat ${DIR}/custom.conf; echo '@@'; cat ${DIR}/config; echo '@@'; cat ${DIR}/games.list; echo '@@'; cat ${DIR}/state; echo '@@'; pm list packages -3 | sed 's/package://'`);
+  const p=out.split('@@\n');
+  S.presets=parse(p[0]||'');
+  const c=parse(p[1]||'')[0]; S.custom=c?{brand:c[2],manu:c[3],model:c[4],dev:c[5],name:c[6]}:{};
+  (p[2]||'').split('\n').forEach(l=>{const m=l.match(/^(MODE|PRESET|ENGINE)=(\w+)/);if(m)S[m[1].toLowerCase()]=m[2]});
+  S.games=new Set((p[3]||'').split('\n').map(s=>s.trim()).filter(Boolean));
+  S.state=(p[4]||'inactive|').trim().split('|');
+  S.installed=(p[5]||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  render();
+}
+function render(){
+  const st=$('#status');const on=S.state[0]==='active';
+  st.textContent=on?'Spoofing: '+S.state[1]:'Stock device (not spoofing)';st.className='chip'+(on?' on':'');
+  $('#mode').innerHTML=MODES.map(([k,l])=>`<button data-m="${k}" class="${S.mode===k?'sel':''}">${l}</button>`).join('');
+  $('#modeNote').textContent=NOTES[S.mode];
+  $('#engine').innerHTML=ENGINES.map(([k,l])=>`<button data-e="${k}" class="${S.engine===k?'sel':''}">${l}</button>`).join('');
+  $('#engNote').textContent=ENOTE[S.engine];
+  const pr=[...S.presets.filter(x=>x[0]!=='custom'),['custom','Custom…']];
+  $('#presets').innerHTML=pr.map(x=>`<button data-p="${x[0]}" class="${S.preset===x[0]?'sel':''}">${x[1]}</button>`).join('');
+  $('#custom').style.display=S.preset==='custom'?'block':'none';
+  const c=S.custom;$('#c_brand').value=c.brand||'';$('#c_manu').value=c.manu||'';$('#c_model').value=c.model||'';$('#c_dev').value=c.dev||'';$('#c_name').value=c.name||'';
+  renderList();
+}
+function renderList(){
+  const all=[...new Set([...S.games,...S.installed])];
+  const q=S.q.toLowerCase();
+  const name=p=>KNOWN[p]||p.split('.').pop();
+  const rank=p=>(S.games.has(p)?0:KNOWN[p]?1:2);
+  const items=all.filter(p=>!q||p.toLowerCase().includes(q)||name(p).toLowerCase().includes(q))
+    .sort((a,b)=>rank(a)-rank(b)||name(a).localeCompare(name(b)));
+  $('#list').innerHTML=items.map(p=>`<label class="row"><div><b>${name(p)}</b><small>${p}</small></div><input type="checkbox" data-g="${p}" ${S.games.has(p)?'checked':''}></label>`).join('')||'<div class="sub">No apps found.</div>';
+  $('#count').textContent=S.games.size;
+}
+document.addEventListener('click',e=>{
+  const m=e.target.closest('[data-m]'),p=e.target.closest('[data-p]'),en=e.target.closest('[data-e]');
+  if(en){S.engine=en.dataset.e;render()}
+  if(m){S.mode=m.dataset.m;render()}
+  if(p){S.preset=p.dataset.p;render()}
+});
+document.addEventListener('change',e=>{
+  const g=e.target.dataset.g;if(!g)return;
+  e.target.checked?S.games.add(g):S.games.delete(g);$('#count').textContent=S.games.size;
+});
+$('#q').addEventListener('input',e=>{S.q=e.target.value;renderList()});
+const clean=s=>String(s||'').replace(/[^A-Za-z0-9 ._-]/g,'').trim();
+$('#save').onclick=async()=>{
+  const games=[...S.games].filter(g=>/^[A-Za-z0-9._]+$/.test(g));
+  let cmd=`mkdir -p ${DIR}; printf 'MODE=%s\\nPRESET=%s\\nENGINE=%s\\n' '${S.mode}' '${S.preset}' '${S.engine}' > ${DIR}/config; `;
+  cmd+=games.length?`printf '%s\\n' ${games.map(g=>`'${g}'`).join(' ')} > ${DIR}/games.list; `:`: > ${DIR}/games.list; `;
+  if(S.preset==='custom'){
+    const f=['c_brand','c_manu','c_model','c_dev','c_name'].map(i=>clean($('#'+i).value));
+    if(!f[2]){alert('Enter at least a model.');return}
+    cmd+=`printf '%s\\n' 'custom|Custom|${f[0]}|${f[1]}|${f[2]}|${f[3]||f[2]}|${f[4]||f[3]||f[2]}' > ${DIR}/custom.conf; `;
+  }
+  await sh(cmd+`sh ${MOD}/vspoof.sh sync`);
+  await load();
+};
+$('#stock').onclick=async()=>{
+  S.mode='off';
+  await sh(`printf 'MODE=off\\nPRESET=%s\\nENGINE=%s\\n' '${S.preset}' '${S.engine}' > ${DIR}/config; sh ${MOD}/vspoof.sh revert`);
+  await load();
+};
+load();
+</script></body></html>
