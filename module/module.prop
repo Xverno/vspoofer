@@ -1,6 +1,7 @@
 id=vspoofer
 name=V Spoofer
-version=v2.0
-versionCode=2
+version=v1
+versionCode=1
 author=@Xverno
 description=Spoof your device model only inside the games you pick (Zygisk), with WebUI app picker and presets. Needs Zygisk. Support: t.me/VernoTalks
+updateJson=https://raw.githubusercontent.com/Xverno/vspoofer/main/update.json

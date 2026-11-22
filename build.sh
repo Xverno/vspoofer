@@ -24,5 +24,5 @@ for abi in arm64-v8a armeabi-v7a x86_64 x86; do
   cp "build/$abi/libvspoofer.so" "out/module/zygisk/$abi.so"
 done
 
-(cd out/module && zip -r -q ../V_Spoofer_v2.0.zip .)
-echo "Built out/V_Spoofer_v2.0.zip"
+(cd out/module && zip -r -q ../V_Spoofer.zip .)
+echo "Built out/V_Spoofer.zip"
