@@ -19,7 +19,7 @@ jobs:
       - name: Upload flashable module
         uses: actions/upload-artifact@v4
         with:
-          name: V_Spoofer_v2.0
+          name: V_Spoofer
           path: out/module/
       - name: Publish release
         if: github.event_name == 'workflow_dispatch' && inputs.release
@@ -27,8 +27,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VER=$(grep '^version=' module/module.prop | cut -d= -f2)
+          CODE=$(grep '^versionCode=' module/module.prop | cut -d= -f2)
           if gh release view "$VER" >/dev/null 2>&1; then
-            gh release upload "$VER" out/V_Spoofer_v2.0.zip --clobber
+            gh release upload "$VER" out/V_Spoofer.zip --clobber
           else
-            gh release create "$VER" out/V_Spoofer_v2.0.zip --title "V Spoofer $VER" --notes "Per-game device spoofer for rooted Android (Magisk/KernelSU, Zygisk). By @Xverno - t.me/VernoTalks"
+            gh release create "$VER" out/V_Spoofer.zip --title "V Spoofer $VER" --notes-file CHANGELOG.md
           fi
+          printf '{\n  "version": "%s",\n  "versionCode": %s,\n  "zipUrl": "https://github.com/%s/releases/latest/download/V_Spoofer.zip",\n  "changelog": "https://raw.githubusercontent.com/%s/main/CHANGELOG.md"\n}\n' "$VER" "$CODE" "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY" > update.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          git diff --cached --quiet || { git commit -m "Update update.json for $VER" && git push; }
